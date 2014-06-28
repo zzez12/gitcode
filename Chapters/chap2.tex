@@ -1,0 +1,242 @@
+\chapter{基于类蓝噪声线段采样的图像分割\footnote{本章内容发表在：类蓝噪声的线段采样方法. 全国几何设计与计算学术会议，2013.}}
+%\chapter{基于类蓝噪声线段采样的图像分割}
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.95\linewidth]{Pictures/seg_and_overseg} \\
+  \caption{分割算法与过分割算法。(a)图\cite{taguchi2008stereo}与(b)图\cite{veksler2010superpixels}为过分割算法；(d)(e)图显示了对(c)图进行手工分割和算法分割的图像分割结果\cite{zhang2008image}。} \label{fig:segs}
+\end{figure*}
+
+\section{问题介绍}
+处理各种不同的图像和不同的需求是使得图像分割技术不断推进的源动力。正如绪论中的介绍，作为图形学中的一个基本问题，图像的分割有着各种各样的不同算法。根据分割的目的不同，有些方法被设计为产生过分割的结果。在图像中，过分割（over-segmentation）可以看作将图像从像素级别的表达改变为多个颜色块的集合，其中每一个色块都是一个单连通的区域，如图\ref{fig:segs} (a).  在一般情况下，过分割中得到的每个色块在其内部有着一定的一致性，如颜色基本相同，而在块与块之间则存在一定的差别. 实际上，这一过分割过程可以看作是某种聚类算法的结果. 在应用中，过分割产生的结果可以使得在接下来的其他操作中将每个色块看作为一个操作单元，这样可以使得在计算过程中从以像素为操作单元改为色块单元，极大地减少了单元的个数，从而大大加快计算. 同时，过分割的结果还看作为物体放置问题中的每个物体需要放置的区域. 从这一点上看，过分割的结果相当于在空间中进行采样，每个采样点占据了空间中的一部分区域.
+
+传统的采样问题是基于点的采样，即采样元是点或者球型，这类采样方法能够产生在空间中均匀分布的点，进一步可以得到以这些点为中心的某种分割结果. 对于这类分割，采样本身的特点对分割有着很大的影响. 由于传统的点采样大部分都具有各向同性的性质，即产生的大部分分割结果都是正多边形，这类过分割结果对于物体放置、纹理合成、图像重建等问题只适用于具有各向同性的物体，如类圆形图形等. 我们希望类似的问题可以推广到更多类型的图形上，如长条形物体等，这将较大地推广采样问题在实际应用中的作用.
+
+由于采样问题和过分割问题有着很大的关联性，本章从采样问题出发，通过将基于点的采样问题，推广到基于线段的采样，得到线段采样结果，更近一步地，使用线段采样结果得到基于该线段采样的过分割结果. 由于采样元选择的是线段，所以得到的采样结果具有非各向同性性质. 与此同时，我们也考虑到在采样的实际应用中，一般并不希望得到完全规整均一的采样结果，我们也引入了一些正则干扰项，产生了具有类蓝噪声特性的线段采样结果. 这一采样结果可以应用在物体放置、纹理生成等相关应用中.
+
+\section{相关工作}
+
+在分割算法中，根据分割的目的可以将分割分为基于部位(part-based)的分割和基于部分的分割(patch-based). 如在前景背景分割中，需要将前景物体完整的分割出来，在某些网格分割中，需要将人手网格中的每一个手指分割出来等等，这些都是基于部位的分割；而在另一类的分割中，需要将物体表面上相似性质的部分集中在一块，这类分割一般是基于部分的分割. 所有这些分割算法中，一个重要的参数就是分割的块数~$k$. 块数~$k$~的选择是一个十分困难的问题. 过小的~$k$~使得分割结果过于粗糙，既无法反应每个分割部分的内部特点，也无法表示分割部分的整体特征，而过大的~$k$~则使得分割结果过于精细. 大部分基于部位的分割都不希望块数~$k$~ 过大，而对于较为复杂的物体和场景，大部分基于部分的分割也很难达到较小的块数~$k$. 如果产生了远大于预期的分割块数，此时的分割结果一般被称为过分割结果. 虽然大部分情况下，过分割结果都是人们不愿意看到的最终结果，但是过分割对接下来的其他操作提供了一个很好的预处理步骤. 人们可以从过分割的结果出发，设计更为快捷简单的分割算法，甚至是从过分割结果出发，直接对其他应用进行后续操作.
+
+\begin{figure*}[h]
+  \centering
+  \includegraphics[width=0.95\linewidth]{Pictures/oversegs} \\
+  \caption{各种过分割算法的效果\cite{achanta2012slic}} \label{fig:oversegs}
+\end{figure*}
+
+\subsection{过分割算法}
+过分割算法是分割算法中的一部分重要内容. 虽然过分割算法大部分为某些具体算法的中间步骤，但是如何设计一个合理的过分割算法仍是需要考虑的一个重要问题. 在图像分析中，过分割算法也可以看作计算超像素(super-pixel)的步骤\cite{achanta2012slic}，见图\ref{fig:oversegs}. 根据算法思想的不同，大致可以将过分割算法分为基于图的算法和基于梯度变化的算法. 基于图的算法将图像看作一张图，图像中的每个像素看作这张图的节点，节点间的权重根据相邻像素的相似性进行定义，然后过分割算法就可以通过最小化定义在该图上的某种能量来得到. Normalized Cuts\cite{shi2000normalized}通过外轮廓和纹理信息定义相邻部分间的权重能量，从最精细的分割——每个像素为一个分割部分出发，递归地计算超像素结果. Cour等\cite{cour2005spectral}(NC05)提供了该算法的一种加速形式，拥有算法复杂度为~$O(N^{\frac{3}{2}})$，这里~$N$~为像素的个数. 但是这种方法产生的超像素的边界较差. Felzenszwalb等\cite{felzenszwalb2004efficient}(GS04)提出了使用最小生成树的聚类方法进行过分割运算，具有较快的运算速度，算法复杂度为~$O(N\log N)$~，但是其产生的每个分割块的大小非常不均匀，同时对于最终生成的块数很难进行显式地控制. Moore 等\cite{moore2008superpixel}(SL08)则从格子出发，通过寻找某种最优路径或缝隙将图像分成更小的垂直或水平区域. Veksler等\cite{veksler2010superpixels}使用类似某些纹理生成的方法，将重叠的小图像块拼接起来，使得每个像素只属于某一个区域. 其生成的结果既可以包含紧致的超像素(GCa10)，也可以生成区域内部颜色一致的超像素(GCb10). Achanta等\cite{achanta2012slic}(SLIC)使用类似k均值聚类的方法，设计了一种简单的线性迭代聚类算法，其能够控制分割的块数，拥有较好的边界性质. 这些方法的结果可以参考图\ref{fig:oversegs}，图中的每一列显示了同一种算法得到的过分割结果，每一行则显示了不同方法得到的结果，第二行图片为第一行图片的局部扩大图，最后一行字母代表了该列图片使用的算法，每张图片的左上角部分的平均分割块数为~$300$~而右下角则为~$100$.
+
+另一类过分割算法是基于梯度变化的算法. 这类方法从某种像素聚类算法出发，迭代地更新每个聚类，直到达到某种收敛条件. Comaniciu等\cite{comaniciu2002mean}(MS02)使用均值漂移(Mean shift)类似算法，通过在迭代中计算每块区域的平均特征并将每块区域的中心移动到平均特征上，该方法将找到一些局部的极值点. 但是这种算法复杂度较高(~$O(N^2)$~)且产生的分割块为各种不规则的块，块的大小和数量也无法直接控制. Vedaldi等\cite{vedaldi2008quick}(QS08)使用快速漂移(quick shift)的算法，在每个区域的特征空间中进行迭代求解. 虽然该方法的边界效果较好，但是其算法效率更低，算法复杂度为~$O(dN^2)$~（~$d$~为某一常数），同时该方法也无法直接控制分割块数或分割块的大小. 这类方法中还存在一大类算法，分水岭算法(watershed algorithms)\cite{shafarenko1997automatic,nguyen2003watersnakes,ng2006medical}(WS91).  这类算法的运算速度较快(~$O(N\log N)$~)，但是一般也不提供控制分割块数等的手段. Turbopixel方法\cite{levinshtein2009turbopixels}(TP09)从一系列的种子点出发，使用类似于水平集(level-set)的方法逐步扩大每个种子点. 该方法基于图像在局部的梯度信息，希望使得最终生成的过分割结果均匀地分布在图像上，不能保证每个分割小块内部信息的一致性.
+
+\begin{figure*}[b]
+  \centering
+  \includegraphics[width=0.95\linewidth]{Pictures/samplings} \\
+  \caption{各类采样方法. (a)图\cite{balzer2009capacity}为点采样；(b)图\cite{hiller2003beyond}为采样元为线段、直线、三角形等的点画图；(c)图\cite{sun2013line}为线段采样. } \label{fig:samplings}
+\end{figure*}
+
+\subsection{点采样}
+采样问题在计算机图形学领域中也是一个十分重要的基础问题，优秀的采样结果对图像渲染、几何处理甚至算法运算中能够提供强大的帮助. 而对于采样的结果，除了在较少特殊应用中使用的规整均一的采样，大部分应用需要产生既有均匀性又带有一定随机性的数据，即所谓的蓝噪声性质.
+
+采样问题的解决方法主要分为两类. 第一类解决方案基于飞镖投掷思想. 其基本算法思路是首先随机生成一系列采样点，然后依次判断每一个采样点是否符合要求，仅保留符合要求的采样点，并删除不满足要求的点. Crow\cite{crow1977aliasing}在处理阴影图像的走样问题中，第一次提出了泊松盘采样的概念；Cook\cite{cook1986stochastic}则进一步提出了飞镖投掷方法可以在统计学意义中解决由采样问题造成的走样，之后有很多工作都是基于这一思想，是这一方法的改进或推广. 这类方法的最大局限性在于计算速度很慢，所以近年来也有很多学者通过使用一些特殊数据结构或使用并行算法\cite{chen2012parallel}等手段进行加速.
+
+另一类解决方案是基于松弛法. 该类方法首先在空间中随机撒点，然后通过定义某些能量，优化这些采样点的位置. 质心Voronoi图（Centroid Voronoi Tessellation，简称CVT），作为图形学中的一个概念，其在采样问题中的引入极大地丰富了传统采样计算的方法. 由于可以将质心Voronoi 图的所有质心的集合看作为图像上的点采样结果，所以很多学者利用这一性质来进行采样和算法设计. 传统的CVT计算方法为使用Llyod迭代方法\cite{lloyd1982least}，即通过迭代的手段，重复求解每个Voronoi区域的质心，然后将新得到的质心看作采样点，再次计算其Voronoi图. 原始的Lloyd迭代算法虽然能够进行求解，但是其具有收敛速度慢、容易造成过度均匀采样结果等缺点. Balzer等\cite{balzer2009capacity}提出了一种改进的Llyod方法，通过加入容积正则项能量，对生成的点采样进行扰动. 实验结果显示，经过这一扰动后的结果既具有均匀性又避免了过度规整效果，即产生了具有蓝噪声性质的点采样结果. 为了解决求解速度问题，Liu 等\cite{liu2009beyond} 提出使用拟牛顿法对CVT能量进行优化求解，使得计算速度得到了很大提高. Chen等\cite{chen2012variational}则将容积能量与CVT能量进行了综合，提出了一个统一的生成具有蓝噪声特性的采样方法计算框架. 该框架基于能量优化手段，使用L-BFGS\cite{liu1989limited}优化方法，可以快速计算采样结果.
+
+\subsection{其它采样方法}
+基于点的采样可以看作是各向同性的采样问题，而非各向同性的采样在近几年来有也不少研究工作. 如Li等\cite{li2010anisotropic}将点采样进行了拓展，将原始的欧式度量改为仿射变换下的度量，即将度量矩阵从单位阵变为一般的对称阵，此时每个点的“势力”范围在各个方向上就存在不同，并通过Lloyd迭代来进行求解. 这一方法类似于将椭圆在空间中进行撒点采样，但本质还是一种基于点的采样. Hiller等\cite{hiller2003beyond}则在实际上对采样元进行了扩展，其采样元包括点、圆形、矩形、三角形. 该方法将任意一种采样元描述为由一系列具有一定统计意义的高维点，通过迭代的手段，使得采样元逐步逼近其对应Voronoi区域的若干阶矩，从而使得采样点位于其Voronoi区域的统计学意义上的中心. 这一方法实际是Lloyd方法的一种高维推广，运算速度较慢. Lu等\cite{lu2012centroidal}根据CVT能量能够使得采样元均匀分布在空间中的特性，将线段看做是三维物体的骨架，通过将线段离散为线段上的一系列采样点对基于线段的CVT图进行逼近，通过能量优化的手段得到了良好的骨架提取结果. Sun等\cite{sun2013line}也考虑了线段采样问题，其将采样元定义为直线或者直线段，并将其看作为冲激响应函数，使用傅里叶变换的手段对线段采样结果的频谱性质进行分析，并将信号处理中的信号采样方式推广到线段采样中，得到具有很好蓝噪声特性的线段采样结果. 各类采样方法的例子可以参看图\ref{fig:samplings}.
+
+\section{算法描述}
+
+\subsection{质心Voronoi图（CVT）}
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=0.75\linewidth]{Pictures/CVT_CCVT} \\
+  \caption{CVT和CCVT. 左图为CVT的结果，右图为CCVT的结果. } \label{fig:cvt}
+\end{figure*}
+
+Voronoi图是计算几何中的一个基本概念. 基于点的Voronoi图已经被学者研究了很多年. 由经典的计算几何知道，给定~$d$~维欧式空间中的一组点集（生成元）$S=\{s_i\}_{i=1}^{N}$，则其对应的Voronoi图~$V=\{V_i\}^N_{i=1}$~具有下述性质，对于每一个Voronoi区域~$V_i$~，$V_i=\{x\in \mathbb{R}^d | \|x-s_i\|\leq \|x-s_j\|,\forall j\neq i\}$. 而CVT则将定义域限制在一个有界空间~$\Omega \subset \mathbb{R}^d$，且每一个Voronoi区域的生成元都与该Voronoi区域的质心（中心）重合，即
+\begin{equation}\label{equ:cvt_center}
+  s_i=\frac{\int_{V_i}x\rho (x)dx}{\int_{V_i}\rho (x)dx}
+\end{equation}
+这里~$\rho (x)$~ 为定义在~$\Omega$~上的某一给定的密度函数. Lloyd 迭代方法\cite{lloyd1982least}就是使用式\ref{equ:cvt_center}将采样点逐步靠近每个Voronoi区域的质心.
+
+与迭代方法的不同，从能量优化的角度出发，根据文献\cite{du1999centroidal}中的描述，CVT可以看作下面能量的极值点
+\begin{equation}
+  E_{CVT}(S)=\sum^N_{i=1}\int_{V_i}\rho (x)\|x-s_i\|^2dx
+\end{equation}
+由实验结果以及相关分析可知，CVT能量能使采样点在空间中均匀规整分布，形成绝大部分Voronoi区域为六边形的优化结果，如图\ref{fig:cvt} 左图. 但在许多实际应用中，这一规整性并不是用户希望得到的性质. 所以有一些学者提出了不同的正则项能量以对这一规整性质进行干扰. Balzer 等\cite{balzer2009capacity}提出加入容积能量的正则项概念，即
+\begin{equation}
+  E_{CapVT}(S)=\sum^N_{i=1}(\int_{V_i}\rho (x)dx)^2
+\end{equation}
+这一能量可以使得最终得到的每一个Voronoi区域具有相同的容积（体积），同时这一正则项的加入可以对CVT能量进行扰动，这时，使用~$CCVT$~能量
+\begin{equation}
+  E_{CCVT}(S)= E_{CVT}(S)+\lambda E_{CapVT}(S)
+\end{equation}
+进行采样运算，可以得到具有一定蓝噪声特性的新的点采样结果，如图\ref{fig:cvt}右图.
+
+\subsection{基于线的质心Voronoi图}
+
+\begin{figure*}[b]
+  \includegraphics[width=0.9\linewidth]{Pictures/lCVT_discrete_and_oriFiled} \\
+  \caption{线段的 Voronoi 图与方向场. (a)图为精确的线段 Voronoi 图；(b)图为近似离散后的线段 Voronoi 图；(c)图为方向场示意图}
+  \label{fig:lineCVT}
+\end{figure*}
+
+点采样对于生成元为球型或者椭球形物体有较好的效果. 在使用CVT工具的采样中，根据CVT能量的定义，当采样点位于Voronoi区域中心时，CVT能量拥有极小值. 而这一能量极值点的几何意义也相当于在空间中使用一定半径的球型物体进行不相交地分布，这是同飞镖投掷类方法想要达到的目的是一致的，所以能够生成均匀的点采样结果. 而对于线型的采样元，点采样的方法就不是非常适用. 我们将基于点元的采样推广到直线段上，希望每一个直线段采样元也位于各自对应的Voronoi区域的中心，并使得线段均匀分布在空间中. 我们使用CVT能量的线段推广形式描述线段采样.
+
+具体地，当生成元为给定的一组直线~$L=\{l_i=[x^0_i,x^1_i]~|~i=1,\cdots,N\}$~时，与基于点的Voronoi图类似，同样可以定义基于线的Voronoi图~$V=\{Vor([x^0_i,x^1_i]~|~i=1,\cdots,N\}$，且满足~$\forall x\in V_i$~和~$\forall i\neq j$，$dist(x, l_i)\leq dist(x,l_j)$. 为了对其进行求解，我们也使用能量优化的方法，而与文献\cite{lu2012centroidal}中的基于线的CVT定义不同，我们更进一步加入密度函数~$\rho (x)$~，定义基于线的质心Voronoi图可由下述能量函数的极值进行描述：
+\begin{eqnarray}
+  E_{lCVT}(L)&=&\sum^N_{i=1}G(l_i)=\sum^n_{i=1}G([x^0_i,x^1_i]) \label{equ:lcvt}\\
+  G([x^0_i,x^1_i])&=&\int_{Vor([x^0_i,x^1_i])\cap \Omega}\rho (z)d(z,[x^0_i,x^1_i])^2dz
+\end{eqnarray}
+其中~$d(z,[x^0_i,x^1_i])$~为点~$z$~到直线段~$[x^0_i,x^1_i]$~的距离.
+
+与基于点的CVT能量类似，仅仅使用能量\eqref{equ:lcvt}有可能使采样结果产生过均匀的效果，为了减弱CVT本身具有的规整性，我们同样加入容积能量对线CVT能量进行限制和扰动，这一正则项的加入同样可以产生类似于蓝噪声的效果. 容积能量定义为：
+\begin{equation}
+  E_{CapVT}(L)=\sum^N_{i=1}(\int_{Vor([x^0_i,x^1_i])\cap \Omega}\rho (x)dx)^2
+\end{equation}
+
+这一能量的几何意义为使得每一个采样元所对应的Voronoi区域趋向于拥有相同的容积. 类似于文献\cite{balzer2009capacity,chen2012variational}的描述，加入容积能量可以使采样结果具有蓝噪声性质. 而根据我们的实验结果可知，该能量的加入，使采样结果也带有一定的随机性，即类蓝噪声效果.
+
+\subsection{方向一致性能量}
+基于点的CVT，每个生成元仅有点的位置这一个属性. 而线段则具有更多的属性，如方向性. 当用户输入或系统得到定义域~$\Omega$~内的某一方向场（如图\ref{fig:lineCVT}右图）后，为了使用户可以更加方便的利用方向场调节最终生成的线CVT的总体方向，我们引入了方向一致性能量：
+\begin{equation}
+  E_{ori}(L)=\sum^N_{i=1}\omega (l_i)d_{ori}(l_i,Vor(l_i))^2
+\end{equation}
+其中~$d_{ori}(l_i,Vor(l_i))$~度量了直线$l_i$与Voronoi区域~$Vor(l_i)$~内部方向场的一致性程度，~$\omega (l_i)$~为权函数. 如果我们更多的考虑该能量对生成结果的影响，最终生成的采样结果将更好地与输入方向场保持一致.
+
+所以，我们加入方向一致性正则罚能量，得到最终的能量函数，即定义为：
+\begin{equation} \label{equ:finalE}
+  E(L)=E_{lCVT}(L)+\lambda_{Cap}E_{CapVT}(L)+\lambda_{ori}E_{ori}(L)
+\end{equation}
+该能量的几何意义为，第一项使得生成结果具有均匀性；第二项则避免了结果过于规整，引入了一定的随机性；前两项可以生成均匀且不完全规整的类蓝噪声线段采样结果；而第三项的引入则加入了更多的用户干预的手段.
+
+
+\subsection{多类采样}
+在采样问题中，Wei\cite{wei2010multi}第一次提出了多类采样的概念. 他提出满足下面条件的采样结果为多类采样，即对于采样结果~$S=\bigcup^C_{c=1}S_c$，其中每一组采样点~$S_c$~均匀分布在空间中且具有蓝噪声性质，且其整体结果~$S$~仍然在空间中均匀分布并具有蓝噪声特性. 对于类似的多类问题，我们希望生成的线段采样结果~$L=\bigcup^C_{c=1}L_c$，其中每一类线段都具有均匀分布且符合其对应的方向场，而且整体结果也具有均匀性的特点. 我们将这一问题归结为下述能量优化问题的极小值：
+\begin{equation}
+  E_{multi-class}(L)=\sum^C_{c=1}E(L_c)+\lambda C\cdot E(L)
+\end{equation}
+其中能量~$E(L)$~为式\eqref{equ:finalE}中定义的能量. 这一能量的第一项保证了每一类内能够满足我们需要的性质，而第二项则使得采样线段整体也符合均匀性.
+
+\section{算法实现和加速}
+本章主要针对二维情况进行讨论. 对于线CVT能量，虽然其形式看起来很简单，但是对该能量的最小化求解却并不平凡. 根据线段Voronoi图的相关理论\cite{fortune1987sweepline}，对于线Voronoi图的求解是十分复杂的. 例如该问题中的一个子问题就是需要求解一般二次曲线的交线，而这一子问题的本身已经十分复杂；同时计算能量\eqref{equ:finalE}时，需要在每一个Voronoi 区域进行积分运算，而这些Voronoi区域有可能是非凸的多边形，其计算也相对复杂. 所以，我们使用逼近的手段来求解这一问题. 我们将线段~$l_i$~近似离散为在该条线段上的一系列均匀采样点~$\{x^k_i\}$~，如图\ref{fig:lineCVT}(b)所示，这里~$x^k_i=c_i+(\cos{\theta_i},\sin{\theta_i})|l_i|\cdot (\frac{k}{K}-0.5), ~k=0, \cdots, K$，其中~$c_i$~为线段~$l_i$~ 的中点，$|l_i|$~ 为线段长度，$\theta_i$~为线段方向. 在这样的离散表示下，$Vor(l_i)\doteq \bigcup^K_{k=1}Vor(x^k_i)$.
+
+在实际应用中，采样线段一般代表某一类具有类似特性的长条状图案，我们给定每条线段的长度~$|l_i|=\sqrt{\frac{|\Omega |}{N}}$，然后通过能量优化的方式来计算每条线段的中心点和方向. 所以对于~$N$~个生成元线段的优化问题，其变量个数为~$3N$.
+
+对于定义在定义域~$\Omega$~上的方向场（如图\ref{fig:lineCVT}右图），我们定义在某一区域~$V\subset \Omega$~中的平均方向为~$\bar{\theta}_V$，则任一方向~$\theta$~与该区域方向场的一致性可以用其角度之间的差异进行度量，我们使用~$d(\theta,\bar{\theta}_V)=|\sin{\frac{\theta - \bar{\theta}_V}{2}}|$为度量公式进行计算. 而且，对于容积（面积）更大的区域我们将对其进行更多的罚修正，即取权函数~$\omega (l_i)=(\int_{Vor([x^0_i,x^1_i])\cap\Omega}\rho (x)dx)^2$.
+
+由于能量\eqref{equ:finalE}为非线性能量，我们采用L-BFGS方法求其极值点. 根据L-BFGS算法的要求，我们需要显式地计算能量\eqref{equ:finalE}对于各个变量的偏导数. 根据文献\cite{chen2012variational,du1999centroidal}和我们的推导得知，
+\begin{eqnarray*}
+  \frac{\partial E_{lCVT}(L)}{\partial c_i} &=& 2\sum^K_{k=0}|V^k_i|(x^k_i-g^k_i) \cdot \frac{dx^k_i}{dc_i} = 2\sum^K_{k=1}|V^k_i|(x^k_i-g^k_i),\\
+  \frac{\partial E_{lCVT}(L)}{\partial \theta_i} &=& 2\sum^K_{k=0}|V^k_i|(x^k_i-g^k_i) \cdot \frac{dx^k_i}{d\theta_i} \\
+  ~ &=& 2\sum^K_{k=1}|V^k_i|(x^k_i-g^k_i)(-\sin{\theta_i}, \cos{\theta_i})|l_i|(\frac{k}{K}-0.5)
+\end{eqnarray*}
+这里~$|V_i|=\int_{V_i}\rho (z)dz$，$g_i=\frac{\int_{V_i}\rho (z)zdz}{\int_{V_i}\rho (z)dz}$.
+
+对于容积能量部分，其导数计算可由下面的公式给出：
+\begin{eqnarray*}
+  \frac{\partial E_{CapVT}(L)}{\partial c_i} &=& \sum^K_{k=0}\frac{\partial E_{CapVT}(L)}{\partial x^k_i}\cdot\frac{\partial x^k_i}{\partial c_i} \\
+  ~ &=& 2\sum^K_{k=0}\sum_{(j,m)\in N^k_i}\frac{|Vor(x^k_i)|-|Vor(x^m_j|}{|x^m_j-x^k_i|}\int_{V_{ijkm}}\rho (x)(x-x^k_i)ds, \\
+  \frac{\partial E_{CapVT}(L)}{\partial \theta_i} &=& \sum^K_{k=0}\frac{\partial E_{CapVT}(L)}{\partial x^k_i}\cdot\frac{\partial x^k_i}{\partial \theta_i} \\
+\end{eqnarray*}
+\begin{equation*}
+  =2\sum^K_{k=0}\sum_{(j,m)\in N^k_i}\frac{|Vor(x^k_i)|-|Vor(x^m_j|}{|x^m_j-x^k_i|}\int_{V_{ijkm}}\rho (x)(x-x^k_i)ds \cdot (-\sin{\theta_i}, \cos{\theta_i})|l_i|(\frac{k}{K}-0.5),
+\end{equation*}
+
+对于方向一致性能量，我们近似地取其导数为：
+\begin{eqnarray*}
+  \frac{\partial E_{ori}(L)}{\partial c_i} &\doteq& \sum^K_{k=0}\frac{\partial}{\partial x^k_i}\Big( (\int_{Vor(x^k_i)}\rho (x)dx)^2 \sin^2{\frac{\theta-\bar{\theta}^k_i}{2}} \Big) \cdot \frac{\partial x^k_i}{\partial c_i} \\
+  ~&=& \sum^K_{k=0} 2\sum_{(j,m)\in N^k_i}\frac{|Vor(x^k_i)|-|Vor(x^m_j|}{|x^m_j-x^k_i|}\int_{V_{ijkm}}\rho (x)(x-x^k_i)ds \cdot \sin^2{\frac{\theta-\bar{\theta}^k_i}{2}} \\
+  ~&~& + \sum^K_{k=0}\Big( \int_{Vor(x^k_i)}\rho (x)dx \Big)^2 \cdot \sin{(\theta-\bar{\theta}^k_i)}, \\
+  \frac{\partial E_{ori}(L)}{\partial \theta_i} &\doteq& \sum^K_{k=0} \bigg( 2\sum_{(j,m)\in N^k_i}\frac{|Vor(x^k_i)|-|Vor(x^m_j|}{|x^m_j-x^k_i|}\int_{V_{ijkm}}\rho (x)(x-x^k_i)ds \cdot \sin^2{\frac{\theta-\bar{\theta}^k_i}{2}} \\
+  ~&~& + \Big( \int_{Vor(x^k_i)}\rho (x)dx \Big)^2 \cdot \sin{(\theta-\bar{\theta}^k_i)}\bigg) \cdot (-\sin{\theta_i}, \cos{\theta_i})|l_i|(\frac{k}{K}-0.5)
+\end{eqnarray*}
+
+所以，整个优化过程为
+\begin{algorithm}[htb]
+\caption{LineCVT算法流程}
+\label{alg:lineCVT}
+\begin{algorithmic}[1]
+  \REQUIRE ~~\\
+  采样元的个数~$N$~，每条线段的离散个数~$K$~
+  \ENSURE ~~\\
+  每条采样线段的最终位置~$\{l_i\}, i=1,2,\cdots ,N$~
+  \STATE 初始化~$N$~个采样元~$\{l_i\}$~
+  \STATE 将这~$N$~个采样元离散为~$NK$~个点，计算这~$NK$~个点的Voronoi图~$\{Vor(x^k_i)\}$~ \label{alg:lineCVT:dis}
+  \STATE 计算每一Voronoi区域的加权面积及质心 \label{alg:lineCVT:comA}
+  \STATE 使用HLBFGS\cite{hlbfgs2010}算法的迭代得到新的线段中点和方向，更新采样元~$\{l_i\}$~ \label{alg:lineCVT:hlbfgs}
+  \STATE 重复步骤\ref{alg:lineCVT:dis}-\ref{alg:lineCVT:hlbfgs}直到能量收敛
+  \RETURN 采样线段 ~$\{l_i\}$~
+\end{algorithmic}
+\end{algorithm}
+
+%\begin{itemize}
+%  \item Step 0 初始化~$N$~个采样元~$\{l_i\}$~；
+%  \item Step 1 将这~$N$~个采样元离散为~$NK$~个点，计算这~$NK$~个点的Voronoi图~$\{Vor(x^k_i)\}$~；
+%  \item Step 2 计算每一Voronoi区域的加权面积及质心，通过HLBFGS\cite{hlbfgs2010}的迭代得到新的线段中点和方向；
+%  \item Step 3 重复步骤1和步骤2，直到能量收敛.
+%\end{itemize}
+
+在这一迭代优化过程中，我们使用CGAL库\cite{cgal}计算Voronoi图，而最为耗时的部分则是计算Voronoi区域的加权面积和质心. 这是因为对于每一个Voronoi多边形区域，其内部的密度函数仅仅和输入的密度图相关，所以对于各种不同形状的多边形，这一加权面积并不容易简单计算出来. 我们采用离散逼近的手段对其进行计算，具体地，将定义域~$\Omega$~进行密集均匀采样，然后计算每个采样点处的密度，通过判断采样点是否属于Voronoi区域进行加和，这一加和的结果就是该区域的容积；而其质心则可用每个密集均匀采样点的密度作为权值，对区域内的所有点加权平均后得到.
+
+\textbf{帧缓存对象(FrameBuffer Object, FBO)} 在算法\ref{alg:lineCVT}中，最为耗时的部分为步骤\ref{alg:lineCVT:comA}.  在这一步骤中，需要根据预先计算好的定义在图像上的密度函数进行积分运算. 使用传统的逐点加和的方法需要逐点判断其是否属于加和的区域，而这一判断对于每次迭代过程都需要重新计算，所以对于各种复杂的多边形该算法的效率并不高. 我们利用OpenGL 中的帧缓存对象(FBO) 对这一步骤进行加速. 在OpenGL的渲染管线中，几何数据和纹理经过了多次转化和测试，最终以二维形式显示在屏幕上. 这一最终渲染目的地被称为帧缓存(framebuffer)，其数据包括二维点的颜色、深度、模板信息和累计缓存等信息. 一般情况下，这一缓存区域完全由窗口系统生成和管理. 在OpenGL 扩展中，GL\_EXT\_framebuffer\_object扩展提供了一种额外创建的不能显示的帧缓存对象(FBO) 接口，而这一部分可以通过OpenGL 中的接口进行控制；一个FBO可以包含一些存储颜色、深度和模板数据的区域. 所以我们可以将原始数据的纹理信息和最终的缓存区域对应起来. 而且，对于帧缓存技术，其提供了一种有效的切换机制，使得数据从缓存区域的提取与渲染非常迅速.
+
+在我们算法的积分运算时，需要预先存储图像上每个点所归属的线段索引，然后利用这一索引来进行积分求和. 这一索引表可以看作为二维图像上的深度值，即可以看作图像上的一种纹理信息. 我们将定义域~$\Omega$~的密集采样结果看作一张图像，然后将在图像上每个采样点（即像素点）的判断索引过程看作提取纹理值过程；具体地，即直接在~$\Omega$~上绘制Voronoi图，每一个Voronoi区域使用不同的颜色值，则最终生成图像上每个像素的颜色值即是其属于的Voronoi区域的索引. 我们利用帧缓存对象的快速切换机制，这一步骤可以快速地提取和更新，可以极大地提高算法\ref{alg:lineCVT}的步骤\ref{alg:lineCVT:comA}的速度.
+
+\section{实验结果和讨论}
+
+\begin{figure*}[b]
+  \centering
+  \includegraphics[width=\linewidth]{Pictures/lCVT_lCVT_density} \\
+  \caption{基于线段的中心Voronoi图. (a)图为密度图为均匀函数时线段采样结果；(b)图显示了(a)图对应的Voronoi区域；使用(c)图的灰度信息作为密度函数，可以得到线段采样结果图(d)}
+  \label{fig:lineCVT_density}
+\end{figure*}
+
+\begin{figure*}[h]
+  \centering
+  \includegraphics[width=\linewidth]{Pictures/lCVT_Ori} \\
+  \caption{加入方向场约束的线段采样结果. (a)图为用户指定的双曲型方向场；(b)图为生成的线段采样结果；将纹理元(d)贴到每一条线段后，可以得到图(c)的物品放置结果}
+  \label{fig:lineCVT_vectorfield}
+\end{figure*}
+
+\begin{figure*}[h]
+  \centering
+  \includegraphics[width=\linewidth]{Pictures/lCVT_multi} \\
+  \caption{多类采样结果. (a)图显示了作用在~$2$~个类上不同的方向场；(b)图为线段采样结果；将(d)中的纹理元贴到线段上，可以得到物体放置结果(c). }
+  \label{fig:lineCVT_multi}
+\end{figure*}
+
+\begin{figure*}[h]
+  \centering
+  \includegraphics[width=\linewidth]{Pictures/lCVT_3D_illu3} \\
+  \caption{三维曲面上的物体放置结果. (a)图为原始三维曲面；(c)图为其参数化结果；(c)(d)为使用不同向量场和纹理元(b)得到的不同的贴图结果 }
+  \label{fig:lineCVT_obj}
+\end{figure*}
+
+本章提出的能量优化方法能够很好地生成具有一定随机性的均匀非规整线段采样结果. 如图\ref{fig:lineCVT_density}所示，其中(a)(b)图的采样线段为~$300$~段，图(d)的采样线段为~$3000$~ 段；且图\ref{fig:lineCVT_density}(a)(b)的密度函数为均匀密度，(d) 图的密度函数为由图(c)的灰度定义出的密度函数. 由结果可以看出，在定义域内的密度函数为非均匀密度时，密度较大的区域将被更多的采样线段覆盖，而密度较小的区域上得到的采样线段则相对较少.
+
+当用户在空间中指定了某个方向场后，我们增大方向一致性能量的权重系数，算法也能够自动生成均匀分布且基本符合该方向场的采样结果，如图\ref{fig:lineCVT_vectorfield}所示. 图\ref{fig:lineCVT_multi}则显示了当用户输入~$2$~类不同的方向场后，本章的算法也能够生成符合该方向场的均匀线段采样结果，并且这2类采样的结果的综合也均匀分布在空间中.
+
+\begin{figure*}[h]
+  \centering
+  \includegraphics[width=\linewidth]{Pictures/lCVT_3D} \\
+  \caption{更多的三维曲面上的物体放置结果}
+  \label{fig:lineCVT_moreobj}
+\end{figure*}
+
+本章方法的一个直接应用就是对图像进行过分割操作. 如图\ref{fig:lineCVT_density}(b)所示，我们的方法能够生成更多类似长条状的超像素，每个超像素都具有非各向同性的特征，且得到超像素的面积较为均匀.
+
+而另一个直接应用是纹理的生成. 我们可以将过分割的得到的每一个区域当做一个小的纹理元，在其上按照线段方向放置相同的纹理元图像，则可以得到类似物体放置的效果. 图\ref{fig:lineCVT_vectorfield}(c)显示了在平面上的一种类长条状物体的放置结果. 而对于更高维的情况，如曲面上的物体放置问题，图\ref{fig:lineCVT_obj}显示了三维曲面上的物体放置的结果. 对于这一例子，我们首先对三维曲面进行二维参数化，然后在其纹理坐标域内求解每一个纹理元的坐标，最后再重新映射回三维曲面的表面. 具体地，我们采用ARAP参数化方法\cite{liu2008local}，得到三维网格曲面的参数化结果(b)，即该网格的纹理坐标，然后在纹理坐标域内进行线段采样和分割，最后根据纹理映射将线段重新映射回曲面上；使用不同的方向场和不同的纹理元可以得到不同的物体放置结果(d) 和(e). 由于纹理与和原始曲面的对应性，我们可以将曲面上的方向场投影到纹理坐标域上，那么加入的这一方向场控制可以使得生成的曲面纹理反映出曲面本身或者用户指定的特殊方向场，如图\ref{fig:lineCVT_obj}(d)所示. 图\ref{fig:lineCVT_moreobj}显示了更多的三维曲面上的物体放置结果.
+
+对于不加入向量场的数据，算法中的参数选择为~$(K,\lambda_{Cap},\lambda_{ori})=(10, 0.1, 0)$，而对于加入向量场的数据则取~$(K,\lambda_{Cap},\lambda_{ori})=(10, 0.1, 0.1)$.
+
+本章的算法在$Inter^{\textregistered}$ Core$\texttrademark$ i5 760@2.80GHz的CPU和6GB内存的台式机平台上进行测试. 采样线段为300-1000左右时，如果不使用FBO进行加速，运算时间大致要超过10分钟，而加速之后的运算时间为30-60秒；而在3000采样线段的规模下，加速后的运算时间在3分钟以内.
+
+\section{本章小结}
+本章主要从与分割问题相关的采样问题出发，提出了一种带有随机性的类蓝噪声的线段采样结果. 本章的算法利用基于点的质心Voronoi图的线段推广形式，通过将线段离散为线段之上的采样点集，使用能量优化的手段计算线段的质心Voronoi图，从而生成带有类蓝噪声特性的线段采样结果. 同时我们加入了方向一致性度量能量，使得最终生成的采样线段能够在整体上与用户指定的方向场保持一致，给用户更多选择. 我们也尝试对多类采样问题进行了描述和求解，扩展了该方法的适用范围. 实验结果表明，本文的方法能够生成带有一定随机性的均匀或符合用户指定方向场的线段采样结果，并且在此基础上得到合理的图像过分割和纹理生成或物体放置的结果.
+
+在计算效率上，本章中已经使用FBO技术对能量优化进行了加速，得到了较为合理的计算效率，但是应该还有较大的效率优化空间. 同时，本章中给出的线段CVT能量对于更高维情况也是适用的，对于大于等于三维的线段采样和与其相关的网格分割也是一个非常值得研究的课题. Lu等\cite{lu2012centroidal}虽然给出了在三维情况下这一问题的一个应用，但是其采样线段的个数较少，对于更大数量的采样线段，算法的效率就会是一个较为重要的问题.
+
+虽然本章提出的算法具有一定的局限性，但是通过实验结果表明，本章的算法在二维情况下有着较好的采样结果和相应的分割应用结果，我们计划在未来的工作中对更高维情况进行研究，同时对算法的效率继续进行优化，以使得算法更加易用和鲁棒.

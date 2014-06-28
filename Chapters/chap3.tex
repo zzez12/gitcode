@@ -1,0 +1,176 @@
+\chapter{分割方法在三维曲面浮雕细节层提取中的应用\footnote{本章内容发表在：三维曲面的浮雕细节层提取方法. 计算机研究与发展, 2012, 49(8).}}
+%\chapter{分割方法在三维曲面浮雕细节层提取中的应用}
+
+
+\section{问题介绍}
+上一章我们讨论了对有一些特殊需求的图像进行分割的一种技术，在本章中，我们将对分割技术在三维曲面中的应用进行一些研究。在计算机的各类算法中，很多算法仅仅对某一类特殊对象的运算结果较好。这是因为对于某一类特殊对象，我们可以先验的了解它们的某些重要特征，而这一类特征对算法的设计和操作有着十分重要的暗示。本章将对三维模型中的一类特殊对象——浮雕的分割提取进行讨论。
+
+\begin{figure}[h]
+  \centering
+  %\includegraphics[scale=0.5]{./Pictures/relief_0.jpg}
+  %\includegraphics[scale=0.5]{./Pictures/relief_1.jpg}
+  %\caption{浮雕艺术}
+  \includegraphics[width=\linewidth]{Pictures/reliefArt}
+   \caption{浮雕艺术}
+  \label{fig:ReliefArt}
+\end{figure}
+
+浮雕作为一种艺术形式（图\ref{fig:ReliefArt}），从古至今都是人们发挥其想象力和创造力的形象载体. 浮雕作为雕塑和绘画结合的产物，其历史源远流长。从原始先民的原始岩画开始，人类逐渐使用颜色和线条表达其生活场景，这些只是最开始的绘画；而当人们发明线刻，想以岩石等硬质材料固定和保存这些形象时，最初的浮雕变产生了，如纳米尔石板（图\ref{fig:ReliefArt} 左图）就展现了古埃及的一段历史。随着人类文明的发展，更多不同形式的浮雕开始生成，其表达内容也慢慢从记录生活发展到展现艺术。浮雕的载体也从墙壁岩石到花瓶、家具甚至是硬币上。各式各样的浮雕效果带给人们不仅仅是美的意境，也反应出雕塑家想要表达的庄重、沉稳、严肃、浑厚甚至是活泼的内涵，人们可以从浮雕艺术中感觉到其音乐般的平和情调和抒情诗般的浪漫柔情。
+
+从浮雕的表现形式上看，浮雕利用压缩的办法将大量的对象进行处理，通过透视等手段表现出三维空间中物体的变化。所以浮雕既有绘画的平面图像美感，又有雕塑的立体感觉，这也对艺术家的创作提供了更大的空间。近些年来电脑技术的发展，使得人们希望运用电脑技术，帮助人们对浮雕这类艺术作品进行显示、保存和再创作。所以越来越多的文章涉及到浮雕的扫描、浮雕的分析和提取，以及如何生成浮雕\cite{weyrich2007digital,song2007automatic} 等。而三维扫描技术的发展，极大地推动了人们对浮雕物体的建模以及分析.
+
+然而，利用扫描技术得到的往往是一个整体的网格曲面，一般情况会得到一个较为完整的多边形网格。而对于更多的用户，这一完整的网格数据很难进行编辑或者重用，人们更多的希望将这一网格中的特殊部分或者特点分析出来以利于进行编辑。而对于浮雕，其最重要的部分实际是在其上凹凸变化的部分，即浮雕细节部分。如何将其单独剥离或分割出来，对于浮雕网格的再利用有着十分重要的意义。本章从浮雕细节层具有的几何特点出发，通过估计其背景曲面或称为基曲面的位置，逐步提取出浮雕细节层。与传统的浮雕提取工作相比，我们提出的方法不仅可以处理多连通的浮雕，也可以处理某些高浮雕网格曲面。通过实验得知，本章的方法对于大部分基曲面点占优的网格都能够得到很好的浮雕细节层分割提取结果。
+%对于我们所较为关注的浮雕区域，即细节部分，与背景区域没有任何区别. 这为我们分析其细节和对浮雕细节进行再创作造成了很大的不便。所以，如何提取出浮雕细节部分就成为浮雕分析过程中一个非常重要的问题\cite{liu2006segmenting,liu2007segmenting,liu2007segmenting1,zatzarinni2009relief}.
+
+
+\section{相关工作}
+\subsection{浮雕生成}
+浮雕可以分为很多种类，各类都有其不同的特点。在浮雕的建模过程中一般都需要保持原有模型的细节和外观。而根据浮雕成品的厚度的不同可以将浮雕分为高浮雕和浅浮雕两类。由于高浮雕可以直接看做是两个或多个曲面的合并，目前更多的研究工作集中在浅浮雕的数字生成上。对于浅浮雕来说，形体被很大程度的压缩，具有很强的平面感，更加接近于绘画的艺术形式。根据其特点和传统制作方式，即可以直接在背景曲面上进行深浅的雕刻，不需要做镂空之类的复杂加工，这类浮雕可以较为容易的在计算机上进行建模。如计算机和数控雕刻机床\cite{cn_jiang2007} 的发明，极大的缩小了雕刻同一般群众的距离，他们可以摆脱繁琐而枯燥的敲打工具，直接在电脑上设计浮雕。近些年来，有许多不同类型的浮雕生成方法，Pasko 等人\cite{pasko2001synthetic} 提出了基于函数运算的方法进行浮雕雕刻合成，Perry 等\cite{perry2001kizamu}和L{\'e}vy 等\cite{levy2003dual}使用了基于距离和网格参数化的方法，而Ohtake 等\cite{ohtake2005multi} 则利用布尔操作以及拓展的隐式曲面的合成来进行计算。近几年来，人们发现，浮雕建模问题同高动态范围图像（HDR：High dynamic range）的压缩技术十分类似。Fattel等\cite{fattal2002gradient} 提出了利用图像梯度域利用对数衰减来进行色彩强度缩减的思想来进行浮雕生成，即根据对数压缩的特点：越大的值衰减越快，而较小的值则相对得到保护\cite{ashikhmin2002tone}。Song等\cite{song2007automatic} 也使用了在梯度域上的形状表示，并结合网格显著特征（Mesh Saliency）定义和用于处理网格表面信号的非尖锐遮罩（Unsharp-masking）技术\cite{luft2006image} 来度量网格的视觉特征量，通过保持原网格的视觉特点来进行几何细节的浅浮雕建模。与其类似，Weyrich 等人\cite{weyrich2007digital} 提出了一种基于三维场景生成数字浮雕的计算方法，即对一个三维场景，首先根据观察视点的不同，提取在某一视点下视图的高度场信息，并通过对高度场在其梯度域上压缩以最终得到浅浮雕结果。其算法最终归结为一个线性系统的求解问题。但是这一方法需要在初始化中分解一个大型稀疏线性矩阵，当用户变换视角或者改变场景参数时，这一求解就需要重新进行，所以用户无法实时以任意角度或者实时调整参数进行浮雕建模. 而文章\cite{cn_zhou2010}则利用GPU 技术将这一问题进行了深入求解，使得建模交互能够实时进行，给予用户更大便利。
+
+
+\subsection{浮雕提取}
+浮雕提取问题可以看作是一类特殊的网格分割问题. 与传统的网格分割问题相比，这一问题由于处理的对象为一类特殊的网格模型，即浮雕网格，所以具有它自己特殊的特点和算法. 这几年来，有一批学者对于浮雕提取问题做出了一些工作. Liu 等\cite{liu2006segmenting,liu2007segmenting,liu2007segmenting1}
+人认为浮雕是附着在一个背景表面上的一些特殊部分，并将浮雕提取问题看作是网格分割问题，用寻找分割边界的方式，达到抽取浮雕的目的. 其中\cite{liu2006segmenting}使用动态轮廓的思想，在用户给定初始粗糙边界后，通过能量优化，使轮廓在较为光滑的背景表面上移动到浮雕的边界部分；而\cite{liu2007segmenting} 更进一步，对带有一些纹理的背景表面进行处理；文献\cite{liu2007segmenting1} 则考虑了浮雕提取之后对带有周期性信息的部分进行一些分析. 但是这些方法有一个缺陷是，每次仅仅能提取出一片连通的浮雕，对于分片的浮雕或者有洞的浮雕基本不能正确提取.
+
+浮雕提取的另外一个手段是直接将浮雕细节部分分割出来. Zatzarinni 等\cite{zatzarinni2009relief}将浮雕抽象为在某个基曲面沿着其法向向外（或向内）突出（或凹陷）的部分，即高度场浮雕. 所以对于浮雕曲面~$M$~上的每一点~$p\in M$~可以将其分为两个部分，用数学公式表达为：
+\begin{equation}
+  p = b + h(p)\cdot \vec{n}_B(b)
+\end{equation}
+其中~$b\in B \subset \mathbb{R}^3$~为基曲面点，$\vec{n}_B:B\rightarrow \mathbb{R}^3$~为基曲面的单位法向，而~$h:M\rightarrow \mathbb{R}$~为定义在原网格上的高度场，其符号反应了该点附近是凸出或者凹陷. 在对基曲面法向进行估计后，该方法可以计算每点的高度，最后用高斯混合模型(GMM)将凸出和凹陷部分过滤出来. 这一方法对于浅浮雕的提取的效果较好，比如一般的文物浮雕的提取. 而对于高浮雕，由于其法向估计的方法过于简单，经常导致法向估计的错误，所以其提取结果也不够准确.
+
+\section{基曲面估计方法}
+浮雕实际上是在一张曲面上雕刻出的凹凸起伏物体的细节. 对于浮雕网格~$M=M(V,T)$，其中~$V$~是顶点位置集合，$T$~为三角面片集合. 我们最终的目的是，将$M$分割为基曲面点集$B$和浮雕点集$F$，即$M=B\cup F$，且$B\cap F=\emptyset$.
+
+根据浮雕的定义，我们可以对这类特殊网格进行特殊的算法设计. 我们发现，如果将浮雕点集$F$较为恰当的还原至原始曲面位置，就能得到一张雕刻前的曲面. 而对于浮雕来说，这一原始曲面（即基曲面）一般都是一张较为光滑的曲面. 在这一变化前后，对于整个网格模型来说，浮雕点集$F$ 和基曲面点集$B$的不同之处可以通过下面两点进行刻画：
+\begin{itemize}
+  \item 顶点法向的变化量，
+  \item 顶点位置的变化量.
+\end{itemize}
+对于基曲面点占优的浮雕网格，基曲面点集的法向和位置变化都较小. 我们可以通过迭代的手段逐步精确的寻找出这些基曲面点，同时利用基曲面的光滑项插值出整个基曲面，然后再根据插值得到的基曲面验证得到的基曲面点.
+
+\subsection{曲面光顺}
+由于我们先验地知道浮雕网格的基曲面具有较好的光滑性，所以为了求出基曲面的位置，我们将输入曲面进行光顺处理，可以假定得到的光顺曲面与原网格的基曲面十分接近. 同时为了保持原网格的整体特征，我们使用保持一定特征的曲面光顺算法来进行这一操作. 具体地，对于网格~$M=M(V,T)$~，其顶点记为~$V=[v^T_1,v^T_2,\cdots,v^T_n]^T, v_i=[v_{ix},v_{iy},v_{iz}]^T\in \mathbb{R}^3$~，记其边集合为~$E$, 并把光顺后的顶点记为~$V'$.  我们采用Least-square Meshes\cite{sorkine2004least,nealen2006laplacian} 方法，通过最小化下面的能量函数进行曲面光顺，即：
+\begin{equation} \label{eqn:least-square}
+  \min_{V'}\|LV' \|^2+\sum_{k\in C}\lambda_k |v'_k - v_k|^2
+\end{equation}
+其中~$L$~为定义在网格~$M$~上的Laplacian算子\cite{nealen2006laplacian}，即~$L=\{L_{ij}\}$~为一个~$n\times n$的矩阵，
+\begin{equation}
+  L_{ij}=\begin{cases}
+    -1 & i=j,\\
+    w_{ij} & (i,j)\in E \\
+    0 & \text{otherwise}
+  \end{cases}
+\end{equation}
+这里~$w_{ij}$~满足~$\sum_{(i,j)\in E}w_{ij}=1$，而权重系数~$w_{ij}$设置为
+\begin{equation}
+  w_{ij}=\frac{\omega_{ij}}{\sum_{(i,k)\in E}\omega_{ik}}
+\end{equation}
+%我们使用能够较好保持原网格特征的权系数：
+权系数的设置有很多不同的方法，如
+\begin{eqnarray}
+  \omega_{ij} &=& 1 \label{eqn:equal} \\
+  \omega_{ij} &=& \cot{\alpha_{ij}}+\cot{\beta_{ij}} \label{eqn:geometry}
+\end{eqnarray}
+
+\begin{figure}[b]
+  \centering
+  \includegraphics[width=0.85\linewidth]{Pictures/laplacian}
+   \caption{Laplacian算子及使用Laplacian算子的光顺\cite{nealen2006laplacian}. (a)图显示了对于顶点~$v_i$~的均匀Laplacian（红色）和余切Laplacian（绿色）向量，同时也显示了式\ref{eqn:geometry}中的参数意义. (c) 图显示了使用Laplacian算子对(b)图模型的光顺结果. }
+  \label{fig:laplacian}
+\end{figure}
+
+其中式\eqref{eqn:equal}称为均匀权函数；而式\eqref{eqn:geometry}为余切权重，~$\alpha_{ij}$~和~$\beta_{ij}$~的定义参看图\ref{fig:laplacian}. 后者的权重较好的反应了原网格的几何特征.
+
+回到式\eqref{eqn:least-square}，根据上述定义的第一项能量，该Laplacian算子具有收缩性质，即它会使得每个顶点向内收缩，而后一项中作为约束项，~$C$~为约束集合，不同的约束集合可以更加灵活地控制每个顶点处的收缩情况. 特别地，越大的~$\lambda_k$~将导致顶点~$v_k$~越少地被收缩.
+
+\subsection{显著度图}
+更好的选择每个顶点的收缩系数（权重系数）将极大的影响求解式\eqref{eqn:least-square}之后得到的光滑曲面. 由浮雕的生成方式可以发现，对于浮雕细节区域，其弯曲程度变化较大. 所以利用反映曲面每点弯曲程度的曲率信息可以更好的估计基曲面点集. 具体地，我们对大曲率区域做较大收缩，取$C=V_0=V, \lambda_k=\frac{1}{(\kappa_{k,1}^2+\kappa_{k,2}^2)}$，即顶点$v_k$ 处主曲率的平方和的倒数（这里主曲率的求解方法是利用\cite{alliez2003anisotropic}中的离散求解公式）. 根据优化能量\eqref{eqn:least-square}的权重系数设置，在曲率较大的区域，该能量会较多的受到约束项控制，反之，在曲率较小区域则较少受到约束.
+\begin{figure}[b]
+\centering
+  \includegraphics[width=0.7\linewidth]{Pictures/mesh_curv} \\
+  \caption{网格曲率图. 左图：原始输入模型；右图：顶点曲率图}
+\end{figure}
+
+\subsection{迭代计算基曲面点集}
+使用上节介绍的显著度图定义每个顶点的权重，并通过求解\eqref{eqn:least-square}式后，我们可以得到初始光滑曲面$M_1$.  然而，在一般情况下，这样得到的光滑曲面$M_1$并不是最终的基曲面（如图\ref{fig:basemesh}(b)）. 我们可以通过分析$M$和$M_1$ 的差异来寻找到一些更加接近于基曲面的点. 由我们的操作对象浮雕曲面的特殊性，对于基曲面点来说，对比$M$和$M_1$，其法向变化量和顶点变化量都相对较小. 根据这一先验观察，我们利用原始网格的拓扑关系，以及定义在每个顶点上的变化量，使用拓扑分水岭算法\cite{bertrand2005topological}，并设置顶点位置阈值$\delta_1$ 和法向变化阈值$\delta_2$，同时又利用基曲面占优的假设，将连通面积较大的基曲面点过滤出来，得到初始的基曲面点集$B_1$（图\ref{fig:basemesh}表面上标记为绿色的顶点集）. 由于我们并不需要直接得到所有的基曲面点集，所以我们采用较为严格的阈值设置，将最有可能为基曲面点的部分过滤出来.
+
+\begin{figure}[b]
+\centering
+  \includegraphics[width=\linewidth]{Pictures/basemesh} \\
+  \caption{基曲面求解过程. (a)为原始曲面；(b)-(e)为通过迭代求解的基曲面，其中绿色点所显示的区域为求解的基曲面}
+  \label{fig:basemesh}
+\end{figure}
+
+接下来，我们将通过迭代的方式逐步确定出所有基曲面点. 在通过上一次的估计后，我们可以得到一些较为准确的基曲面点，记为$B_{m-1}(m\geq 2)$，我们可以充分利用这些点，对其他基曲面点做更好的估计. 具体地，将\eqref{eqn:least-square}式中的约束集定义为上一步得到的基曲面点$B_{m-1}$，即$C=B_{m-1}$，取其参数$w_k$足够大以固定这些点（或将软约束改为硬约束），并利用原始网格的拓扑来定义Laplacian算子$L$\cite{nealen2006laplacian}，再次求解\eqref{eqn:least-square} 式，得到下一张光滑曲面$M_m$. 然后再次计算法向和顶点位置变化量，并通过过滤得到更加准确的基曲面点$B_m$.
+
+这样，在经过若干次迭代之后，基曲面点将逐步趋于稳定，从而基曲面也将被较为准确的计算出来（如图\ref{fig:basemesh}(e)）.
+
+\section{浮雕细节层的提取}
+\begin{figure}[h]
+\centering
+  \includegraphics[width=0.8\linewidth]{Pictures/scalarField} \\
+  \caption{基曲面及标量场. 左图：最终基曲面；中图：基曲面的曲率图；右图：顶点标量场}
+  \label{fig:scalarField}
+\end{figure}
+
+通过上一步基曲面的估计，我们可以得到基本真实的原始网格的基曲面（如图\ref{fig:scalarField}左图）. 并且如图\ref{fig:scalarField}中图所示，最终得到的基曲面的曲率都非常小，基曲面非常光滑. 我们将原始网格上的点向这一基曲面做投影，也即对每个原始网格上的点$v_k$来说，寻找其在基曲面上的最近点$u_k$. 对于浮雕点集，$v_k$和$u_k$的距离变化应该较大，而基曲面点集，这一距离则较为接近. 这一距离可以看作为定义在网格顶点上的标量场，记为$d:V\rightarrow \mathbb{R}$.
+
+实际上，标量场~$d$~已经很好的反应了浮雕与基曲面的差异（如图\ref{fig:scalarField}右图）. 我们使用高斯混合模型（GMM）对上述标量场~$d$~的直方图进行聚类. 高斯混合模型是一种常用的概率统计模型，一般地，可以用下面的式子表示：
+\begin{equation}\label{eqn:gmm}
+  p(x)=\sum_k\pi_kN(x\mid \mu_k,\Sigma_k), \sum_k\pi_k=1
+\end{equation}
+
+这里$N(x\mid \mu_k,\Sigma_k)$为高斯分布，$k$为高斯核的个数，即分类的个数. 对于我们的聚类问题，由于最终是将网格分为浮雕点集和基曲面点集两类，故令$k=2$，并使用EM(Expectation Maximization) 方法\cite{bishop2006pattern}拟合模型\eqref{eqn:gmm}. 最终对于标量值为$x$的分类结果可以用下面的式子计算：
+\begin{equation}\label{eqn:cluster}
+  c(x)=\max\{k\mid N(\pi_k, \Sigma_k)\geq N(\pi_k,\Sigma_j), \forall j\neq k\}
+\end{equation}
+
+\begin{figure}[h]
+\centering
+  \includegraphics[width=0.7\linewidth]{Pictures/gmm} \\
+  \caption{标量场直方图与高斯混合模型}
+  \label{fig:gmm}
+\end{figure}
+
+如图\ref{fig:gmm}所示我们可以根据\eqref{eqn:cluster}式确定每个顶点的分类结果，因而就能提取出浮雕点集；同时，保持原始点集在这一浮雕点集上的拓扑结构，就能得到最终的浮雕细节部分的网格. 如果对自动聚类的结果不很满意，也可以通过手动设置阈值对标量场进行更为细致的分割.
+
+\section{实验结果和讨论}
+
+\begin{figure}[h]
+\centering
+  \includegraphics[width=0.8\linewidth]{Pictures/ret_vase} \\
+  \caption{本章算法的结果. (a)顶点标量场；(b)本文算法提取的结果；(c)文献\cite{zatzarinni2009relief}的高度场结果}
+  \label{fig:vaseret}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+  \includegraphics[width=\linewidth]{Pictures/ret_cg} \\
+  \caption{本章算法对CG模型的提取结果. 其中(a)(c)为标量场；(b)(d) 为提取结果}
+  \label{fig:cgret}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+  \includegraphics[width=\linewidth]{Pictures/ret_more} \\
+  \caption{更多模型的提取结果.}
+  \label{fig:moreret}
+\end{figure}
+
+我们的方法对于基曲面点占优的大部分模型都能成功提取出浮雕点集. 图\ref{fig:vaseret}显示了利用我们的方法得到的分割结果，紫色部分即为浮雕区域，其中为了显示清晰，将浮雕点向其外法向方向做了一点偏移. 图\ref{fig:cgret}显示了一个同时存在外凸和内凹浮雕的模型. 从标量场和提取结果上看，我们的方法可以准确的计算标量场，并能够较为准确的提取出浮雕细节点集. 图\ref{fig:moreret} 展示了我们的算法对更多模型的提取结果.
+
+我们也同以往的算法进行了对比. 对于Liu\cite{liu2006segmenting,liu2007segmenting,liu2007segmenting1} 的提取方法，由于其不能提取出带洞的浮雕，所以类似于图\ref{fig:vaseret}中的模型，其算法不能达到我们需要的效果. 图\ref{fig:vaseret}(c)显示了使用\cite{zatzarinni2009relief}的算法得到的高度场，由于其对法向的估计较为简单，对于这类稍高一些的浮雕，其算法的法向估计是错误的，从而造成了高度场计算的失败，而从错误的高度场出发显然是不能抽取出好的浮雕细节的. 我们的方法对于这类浮雕则具有较好的抽取效果.
+
+\begin{figure}[t]
+\centering
+  \includegraphics[width=0.7\linewidth]{Pictures/ret_scan} \\
+  \caption{本章算法对扫描数据的提取结果. (a)为输入网格数据；(b)为顶点标量场；(c)为本章算法的浮雕细节层}
+  \label{fig:scanret}
+\end{figure}
+
+我们同时也对一些带有噪音的模型进行了测试. 图\ref{fig:scanret}显示了我们的算法对扫描得到的数据的抽取结果. 从图\ref{fig:scanret}(b) 可以看到，这一个模型带有一定的噪音，而我们的算法能够准确的提取出浮雕细节部分的网格.
+
+我们的算法在Intel$^{\textregistered}$ Core$^{\texttrademark}$2 T7300@2.00Hz 的CPU和3GB内存的笔记本平台上进行测试. 测试的模型点数在2万至8万之间，这些模型都可以在2-10分钟之内得到最终的提取结果. 而使用文献\cite{zatzarinni2009relief}的方法，其运算法在对每点的法向的计算中消耗很多时间，对于图6 中的例子，文献\cite{zatzarinni2009relief}的方法要超过20分钟才能得到最终结果.
+
+\section{本章小结}
+我们利用三维浮雕网格这类特殊对象所具有的特点，提供了一种新的更加准确估计浮雕基曲面的方法，从而最终将浮雕网格进行有意义的分割，并提取出浮雕细节部分. 我们通过迭代求解的手段，利用基曲面光滑性的先验知识，从较少的确定的基曲面点逐步插值出光滑曲面，再与原始曲面进行比照后得到更多确定的基曲面点集，最终得到更加精确的基曲面. 在基曲面确定后，我们利用基曲面与原始曲面顶点间距离的标量场将最终的浮雕点集提取出来. 本章的方法对于各类基曲面点占优的三维浮雕网格有着较为准确的提取结果.
